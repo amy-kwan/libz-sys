@@ -30,6 +30,35 @@ fn main() {
         return;
     }
 
+    // On AIX, use system zlib or zlibNX if available.
+    if target.contains("aix") {
+        let zlibNX_lib = "/usr/opt/zlibNX/lib";
+        let zlibNX_include = "/usr/opt/zlibNX/include";
+        // Use zlibNX if available.
+        if std::path::Path::new(zlibNX_lib).join("libz.a").exists() &&
+           std::path::Path::new(zlibNX_include).join("zlib.h").exists() {
+            println!("cargo:rustc-link-search=native={}", zlibNX_lib);
+            println!("cargo:rustc-link-lib=z");
+            println!("cargo:include={}", zlibNX_include);
+            return;
+        }
+        // Otherwise, fall back to system zlib.
+        for lib_path in &["/usr/lib", "/opt/freeware/lib"] {
+            if std::path::Path::new(lib_path).join("libz.a").exists() {
+                println!("cargo:rustc-link-search=native={}", lib_path);
+                println!("cargo:rustc-link-lib=z");
+                // Find include paths.
+                for inc_path in &["/usr/include", "/opt/freeware/include"] {
+                    if std::path::Path::new(inc_path).join("zlib.h").exists() {
+                        println!("cargo:include={}", inc_path);
+                        break;
+                    }
+                }
+                return;
+            }
+        }
+    }
+
     // Don't run pkg-config if we're linking statically (we'll build below) and
     // also don't run pkg-config on FreeBSD/DragonFly. That'll end up printing
     // `-L /usr/lib` which wreaks havoc with linking to an OpenSSL in /usr/local/lib
